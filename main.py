@@ -12,9 +12,9 @@ CHANNELS = [
     "@StudioFilm_org"
 ]
 
-FILM_CHANNEL = "@YourFilmChannel"
+FILM_CHANNEL = "@only_filimlar"
 MENU_IMAGE = "https://your-image-link.jpg"
-FILM_LINK = "https://t.me/yourchannel"
+FILM_LINK = "https://t.me/only_filimlar"
 
 MONGO_URL = "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?appName=Cluster0"
 
