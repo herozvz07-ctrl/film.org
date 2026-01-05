@@ -13,7 +13,7 @@ CHANNELS = [
 ]
 
 FILM_CHANNEL = "@only_filimlar"
-MENU_IMAGE = "https://your-image-link.jpg"
+MENU_IMAGE = "https://i.postimg.cc/7ZN8r33G/40b3a7667c57b37bb66735d67609798e.jpg"
 FILM_LINK = "https://t.me/only_filimlar"
 
 MONGO_URL = "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?appName=Cluster0"
