@@ -22,7 +22,13 @@ MONGO_URL = "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.m
 bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
 
-client = MongoClient(MONGO_URL)
+client = MongoClient(
+    "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?retryWrites=true&w=majority",
+    tls=True,
+    tlsAllowInvalidCertificates=True,
+    tlsAllowInvalidHostnames=True
+)
+
 db = client["film_bot"]
 films = db["films"]
 
