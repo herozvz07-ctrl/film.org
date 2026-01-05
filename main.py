@@ -16,38 +16,38 @@ FILM_CHANNEL = "@only_filimlar"
 MENU_IMAGE = "https://i.postimg.cc/7ZN8r33G/40b3a7667c57b37bb66735d67609798e.jpg"
 FILM_LINK = "https://t.me/only_filimlar"
 
-MONGO_URL = "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?appName=Cluster0"
+MONGO_URL = "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?retryWrites=true&w=majority"
 
 # ---------------- BOT ----------------
 bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
 
-client = MongoClient(
-    "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?retryWrites=true&w=majority",
-    tls=True,
-    tlsAllowInvalidCertificates=True,
-    tlsAllowInvalidHostnames=True
-)
-
+# ✅ MongoDB (Python 3.11 compatible)
+client = MongoClient(MONGO_URL)
 db = client["film_bot"]
 films = db["films"]
 
 # ---------------- WEBHOOK ----------------
 @app.route("/", methods=["POST"])
 def webhook():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    json_data = request.get_data().decode("utf-8")
+    update = telebot.types.Update.de_json(json_data)
+    bot.process_new_updates([update])
     return "OK", 200
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running"
 
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL)
 
 # ---------------- FUNCTIONS ----------------
-
 def check_sub(user_id):
     for ch in CHANNELS:
         try:
-            s = bot.get_chat_member(ch, user_id).status
-            if s not in ["member", "administrator", "creator"]:
+            status = bot.get_chat_member(ch, user_id).status
+            if status not in ["member", "administrator", "creator"]:
                 return False
         except:
             return False
@@ -84,15 +84,19 @@ def check(call):
     else:
         bot.answer_callback_query(call.id, "❌ Siz hali obuna emassiz!")
 
-# ---------------- ADD FILM (ADMIN) ----------------
-@bot.channel_post_handler(func=lambda m: m.chat.username == FILM_CHANNEL.replace("@",""))
+# ---------------- SAVE FILMS ----------------
+@bot.channel_post_handler(func=lambda m: m.chat.username == FILM_CHANNEL.replace("@", ""))
 def save_film(m):
-    if m.text:
-        code = m.text.split("\n")[0]
-        films.insert_one({
-            "code": code.lower(),
-            "message_id": m.message_id
-        })
+    if not m.text:
+        return
+
+    code = m.text.split("\n")[0].lower()
+
+    films.update_one(
+        {"code": code},
+        {"$set": {"message_id": m.message_id}},
+        upsert=True
+    )
 
 # ---------------- GET FILM ----------------
 @bot.message_handler(func=lambda m: True)
@@ -116,4 +120,4 @@ def get_film(m):
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
