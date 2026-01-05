@@ -9,8 +9,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 CHANNELS = [
-    "@YourChannel1",
-    "@YourChannel2"
+    "@StudioFilm_org"
 ]
 
 FILM_CHANNEL = "@YourFilmChannel"
