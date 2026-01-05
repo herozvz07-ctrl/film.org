@@ -1,123 +1,127 @@
 import os
+import asyncio
+import requests
 from flask import Flask, request
-import telebot
-from telebot import types
-from pymongo import MongoClient
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ---------------- CONFIG ----------------
-TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-CHANNELS = [
-    "@StudioFilm_org"
-]
-
+REQUIRED_CHANNELS = ["@StudioFilm_org"]
 FILM_CHANNEL = "@only_filimlar"
-MENU_IMAGE = "https://i.postimg.cc/7ZN8r33G/40b3a7667c57b37bb66735d67609798e.jpg"
-FILM_LINK = "https://t.me/only_filimlar"
 
-MONGO_URL = "mongodb+srv://herozvz07_db_user:iXi80aUXy9qUtPcP@cluster0.bb0wzws.mongodb.net/?retryWrites=true&w=majority"
+MENU_IMAGE = "https://i.postimg.cc/7ZN8r33G/40b3a7667c57b37bb66735d67609798e.jpg"
+CHANNEL_LINK = "https://t.me/only_filimlar"
+
+# ---------------- MongoDB Data API ----------------
+MONGO_APP_ID = "PASTE_APP_ID"
+MONGO_API_KEY = "PASTE_API_KEY"
+MONGO_CLUSTER = "Cluster0"
+MONGO_DB = "film_bot"
+MONGO_COLLECTION = "films"
+
+MONGO_URL = f"https://data.mongodb-api.com/app/{MONGO_APP_ID}/endpoint/data/v1/action"
+HEADERS = {
+    "Content-Type": "application/json",
+    "api-key": MONGO_API_KEY
+}
 
 # ---------------- BOT ----------------
-bot = telebot.TeleBot(TOKEN, threaded=False)
+bot = Bot(BOT_TOKEN)
+dp = Dispatcher(bot)
 app = Flask(__name__)
 
-# ✅ MongoDB (Python 3.11 compatible)
-client = MongoClient(MONGO_URL)
-db = client["film_bot"]
-films = db["films"]
+# ---------------- Mongo Functions ----------------
+def save_film(code, message_id):
+    requests.post(MONGO_URL + "/insertOne", json={
+        "dataSource": MONGO_CLUSTER,
+        "database": MONGO_DB,
+        "collection": MONGO_COLLECTION,
+        "document": {
+            "code": code,
+            "message_id": message_id
+        }
+    }, headers=HEADERS)
 
-# ---------------- WEBHOOK ----------------
-@app.route("/", methods=["POST"])
-def webhook():
-    json_data = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_data)
-    bot.process_new_updates([update])
-    return "OK", 200
+def get_film(code):
+    r = requests.post(MONGO_URL + "/findOne", json={
+        "dataSource": MONGO_CLUSTER,
+        "database": MONGO_DB,
+        "collection": MONGO_COLLECTION,
+        "filter": {"code": code}
+    }, headers=HEADERS)
+    return r.json().get("document")
 
-@app.route("/", methods=["GET"])
-def home():
-    return "Bot is running"
-
-bot.remove_webhook()
-bot.set_webhook(url=WEBHOOK_URL)
-
-# ---------------- FUNCTIONS ----------------
-def check_sub(user_id):
-    for ch in CHANNELS:
+# ---------------- Subscription ----------------
+async def check_sub(user_id):
+    for ch in REQUIRED_CHANNELS:
         try:
-            status = bot.get_chat_member(ch, user_id).status
-            if status not in ["member", "administrator", "creator"]:
+            s = (await bot.get_chat_member(ch, user_id)).status
+            if s not in ["member", "administrator", "creator"]:
                 return False
         except:
             return False
     return True
 
-def sub_keyboard():
-    kb = types.InlineKeyboardMarkup()
-    for ch in CHANNELS:
-        kb.add(types.InlineKeyboardButton("📢 Kanalga obuna bo‘lish", url=f"https://t.me/{ch.replace('@','')}"))
-    kb.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
+def sub_kb():
+    kb = InlineKeyboardMarkup()
+    for ch in REQUIRED_CHANNELS:
+        kb.add(InlineKeyboardButton("📢 Obuna bo‘lish", url=f"https://t.me/{ch.replace('@','')}"))
+    kb.add(InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
     return kb
 
-def send_menu(chat_id, name):
-    bot.send_photo(
-        chat_id,
-        MENU_IMAGE,
-        caption=f"👋 Asalomu Aleykum {name}, botimizga xush kelibsiz!\n\n🔎 Endi kerakli <a href='{FILM_LINK}'>filmning</a> kodini yuboring.",
-        parse_mode="HTML"
-    )
-
 # ---------------- START ----------------
-@bot.message_handler(commands=["start"])
-def start(msg):
-    if not check_sub(msg.from_user.id):
-        bot.send_message(msg.chat.id, "❗ Iltimos obuna bo‘ling:", reply_markup=sub_keyboard())
+@dp.message_handler(commands=["start"])
+async def start(m: types.Message):
+    if not await check_sub(m.from_user.id):
+        await m.answer("❗ Iltimos, obuna bo‘ling:", reply_markup=sub_kb())
     else:
-        send_menu(msg.chat.id, msg.from_user.first_name)
+        await bot.send_photo(
+            m.chat.id,
+            MENU_IMAGE,
+            caption=f"👋 Assalomu alaykum {m.from_user.first_name}!\n\n🔎 Endi <a href='{CHANNEL_LINK}'>kerakli filmning</a> kodini yuboring.",
+            parse_mode="HTML"
+        )
 
-@bot.callback_query_handler(func=lambda c: c.data == "check")
-def check(call):
-    if check_sub(call.from_user.id):
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        send_menu(call.message.chat.id, call.from_user.first_name)
+@dp.callback_query_handler(lambda c: c.data == "check")
+async def check(call: types.CallbackQuery):
+    if await check_sub(call.from_user.id):
+        await call.message.delete()
+        await start(call.message)
     else:
-        bot.answer_callback_query(call.id, "❌ Siz hali obuna emassiz!")
+        await call.answer("❌ Obuna bo‘lmadingiz")
 
-# ---------------- SAVE FILMS ----------------
-@bot.channel_post_handler(func=lambda m: m.chat.username == FILM_CHANNEL.replace("@", ""))
-def save_film(m):
-    if not m.text:
+# ---------------- Save Films ----------------
+@dp.channel_post_handler(lambda m: m.chat.username == FILM_CHANNEL.replace("@",""))
+async def save_channel(m: types.Message):
+    if m.text:
+        code = m.text.split("\n")[0].lower()
+        save_film(code, m.message_id)
+
+# ---------------- Get Film ----------------
+@dp.message_handler()
+async def get_movie(m: types.Message):
+    if not await check_sub(m.from_user.id):
+        await m.answer("❗ Obuna bo‘ling", reply_markup=sub_kb())
         return
 
-    code = m.text.split("\n")[0].lower()
-
-    films.update_one(
-        {"code": code},
-        {"$set": {"message_id": m.message_id}},
-        upsert=True
-    )
-
-# ---------------- GET FILM ----------------
-@bot.message_handler(func=lambda m: True)
-def get_film(m):
-    if not check_sub(m.from_user.id):
-        bot.send_message(m.chat.id, "❗ Iltimos obuna bo‘ling:", reply_markup=sub_keyboard())
-        return
-
-    code = m.text.lower()
-    film = films.find_one({"code": code})
-
+    film = get_film(m.text.lower())
     if not film:
-        bot.send_message(m.chat.id, "❌ Film topilmadi")
+        await m.answer("❌ Film topilmadi")
         return
 
-    bot.copy_message(
-        chat_id=m.chat.id,
-        from_chat_id=FILM_CHANNEL,
-        message_id=film["message_id"]
-    )
+    await bot.copy_message(m.chat.id, FILM_CHANNEL, film["message_id"])
+
+# ---------------- WEBHOOK ----------------
+@app.route("/", methods=["POST"])
+def webhook():
+    update = types.Update.de_json(request.get_json(force=True))
+    asyncio.run(dp.process_update(update))
+    return "OK"
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    WEBHOOK_URL = os.environ["RENDER_EXTERNAL_URL"] + "/"
+    asyncio.run(bot.set_webhook(WEBHOOK_URL))
+    app.run(host="0.0.0.0", port=10000)
