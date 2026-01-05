@@ -1,4 +1,3 @@
-pyTelegramBotAPI
-Flask
-pymongo
-dnspython
+aiogram
+flask
+requests
